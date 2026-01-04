@@ -45,10 +45,6 @@ async function initDb() {
 
   if (!hasPhone) {
     // perform migration:
-    // 1) create users_new with the desired schema (phone instead of email)
-    // 2) copy data from users to users_new mapping email -> phone where available
-    // 3) drop old users table and rename users_new -> users
-
     await db.exec(`
       CREATE TABLE IF NOT EXISTS users_new (
         id TEXT PRIMARY KEY,
@@ -63,29 +59,23 @@ async function initDb() {
     `);
 
     if (hasEmail) {
-      // copy email -> phone
       await db.exec(`
         INSERT OR IGNORE INTO users_new (id, username, phone, password_hash, balance, freeRounds, createdAt, updatedAt)
         SELECT id, username, email, password_hash, balance, freeRounds, createdAt, updatedAt FROM users;
       `);
     } else {
-      // no email column to copy, copy other columns, phone will be NULL
       await db.exec(`
         INSERT OR IGNORE INTO users_new (id, username, phone, password_hash, balance, freeRounds, createdAt, updatedAt)
         SELECT id, username, NULL, password_hash, balance, freeRounds, createdAt, updatedAt FROM users;
       `);
     }
 
-    // drop old table and rename
     await db.exec(`
       DROP TABLE users;
       ALTER TABLE users_new RENAME TO users;
     `);
-  } else {
-    // already has phone column; ensure table has the final schema (nothing to do)
   }
 
-  // Ensure indexes/PRAGMA if needed (we already set UNIQUE on phone/username)
   return db;
 }
 
