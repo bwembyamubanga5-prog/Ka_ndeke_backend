@@ -1,0 +1,826 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>Ka Ndeke – Accounts & Crash Game</title>
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <style>
+    /* --- Layout & theme --- */
+    body{
+      margin:0;
+      font-family: Arial, sans-serif;
+      background:#0b1c2d;
+      color:#fff;
+      text-align:center;
+      -webkit-font-smoothing:antialiased;
+      -moz-osx-font-smoothing:grayscale;
+    }
+
+    .header{
+      display:flex;
+      justify-content:space-between;
+      align-items:center;
+      padding:10px;
+      background:#081421;
+      gap:12px;
+      flex-wrap:wrap;
+    }
+
+    .header h2{margin:0;color:#f7c600;font-size:18px}
+
+    .header .auth button{
+      margin-left:5px;
+      padding:6px 10px;
+    }
+
+    .backend-config {
+      display:flex;
+      gap:8px;
+      align-items:center;
+      flex-wrap:wrap;
+    }
+
+    .backend-config input {
+      padding:6px;
+      border-radius:4px;
+      border:1px solid #234;
+      background:#072033;
+      color:#fff;
+      width:220px;
+    }
+    .backend-config button { padding:6px 8px; }
+
+    .status-badge { font-size:12px; padding:4px 8px; border-radius:6px; background:#072033; color:#9fd6ff; margin-left:8px; }
+
+    .balance{
+      padding:10px;
+      font-size:18px;
+      background:#081421;
+    }
+
+    .game{
+      padding:10px;
+      max-width:740px;
+      margin:20px auto;
+    }
+
+    .sky{
+      position:relative;
+      height:280px;
+      background:linear-gradient(#1e3c72,#2a5298);
+      overflow:hidden;
+      border-radius:10px;
+    }
+
+    #plane{
+      position:absolute;
+      bottom:10px;
+      left:50%;
+      transform:translateX(-50%);
+      font-size:40px;
+    }
+
+    #multiplier{
+      position:absolute;
+      top:10px;
+      left:10px;
+      font-size:22px;
+      font-weight:bold;
+    }
+
+    .controls{
+      margin-top:15px;
+    }
+
+    .controls input{
+      padding:8px;
+      width:140px;
+      border-radius:4px;
+      border:1px solid #234;
+      background:#072033;
+      color:#fff;
+    }
+
+    .controls button{
+      padding:8px 12px;
+      margin:5px;
+      border-radius:4px;
+      border:none;
+      background:#f7c600;
+      color:#081421;
+      font-weight:bold;
+      cursor:pointer;
+    }
+
+    #status{
+      margin-top:10px;
+      font-weight:bold;
+    }
+
+    .demo{
+      font-size:12px;
+      opacity:0.9;
+      margin-top:5px;
+    }
+
+    /* deposit/withdraw compact area */
+    .wallet-controls {
+      margin-top:12px;
+      display:flex;
+      gap:8px;
+      justify-content:center;
+      flex-wrap:wrap;
+      align-items:center;
+    }
+    .wallet-controls input { width:140px; padding:6px; border-radius:4px; border:1px solid #234; background:#072033; color:#fff; }
+
+    /* modal */
+    .modal-backdrop {
+      display:none;
+      position:fixed;
+      inset:0;
+      background:rgba(0,0,0,0.6);
+      justify-content:center;
+      align-items:center;
+      z-index:1000;
+    }
+    .modal {
+      background:#0b2035;
+      padding:16px;
+      border-radius:8px;
+      width:360px;
+      box-shadow:0 6px 18px rgba(0,0,0,0.6);
+      text-align:left;
+    }
+    .modal h3{margin-top:0;color:#f7c600}
+    .modal label{display:block;margin-top:8px;font-size:14px}
+    .modal input{width:100%;padding:8px;margin-top:4px;border-radius:4px;border:1px solid #234;background:#072033;color:#fff}
+    .modal .row{display:flex;gap:8px;margin-top:12px;justify-content:flex-end}
+    .small { font-size:12px; color:#bbb; margin-top:6px; display:block;}
+    .error { color:#ff7b7b; margin-top:8px; font-size:13px;}
+    .success { color:#7bffb6; margin-top:8px; font-size:13px;}
+    @media (max-width:420px){ .modal{width:92%} .controls input{width:100px} .wallet-controls{flex-direction:column} .backend-config input{width:140px} }
+  </style>
+</head>
+<body>
+  <div class="header">
+    <h2>✈️ Ka Ndeke</h2>
+
+    <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;">
+      <div class="backend-config" title="Optional: set your live backend (include protocol e.g. https://example.com)">
+        <input id="backendUrlInput" type="text" placeholder="Backend URL (optional)" />
+        <button id="setBackendBtn">Set</button>
+        <div id="apiStatus" class="status-badge">API: auto</div>
+      </div>
+
+      <div class="auth">
+        <button id="loginBtn">Login</button>
+        <button id="registerBtn">Register</button>
+        <button id="logoutBtn" style="display:none">Logout</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="balance">
+    Logged in as: <strong id="username">Guest</strong><br>
+    Balance: <strong id="balance">K 10.00</strong><br>
+    <small id="freeRounds"></small>
+    <div class="small">Deposits/withdrawals use the server when available. If no server is set or unreachable, the app will work in offline mode and store accounts locally on the device.</div>
+  </div>
+
+  <div class="game">
+    <div class="sky">
+      <div id="multiplier">1.00x</div>
+      <div id="plane">✈️</div>
+    </div>
+
+    <!-- Controls (above wallet controls as requested) -->
+    <div class="controls" aria-label="game-controls">
+      <input type="number" id="betAmount" placeholder="Bet (K)" />
+      <br />
+      <button id="betBtn">Place Bet</button>
+      <button id="cashOutBtn" disabled>Cash Out</button>
+
+      <!-- Deposit/Withdraw (moved under controls) -->
+      <div class="wallet-controls" style="margin-top:12px;">
+        <input type="number" id="depositAmount" placeholder="Deposit amount" />
+        <button id="depositBtn">Deposit</button>
+        <input type="number" id="withdrawAmount" placeholder="Withdraw amount" />
+        <button id="withdrawBtn">Withdraw</button>
+      </div>
+    </div>
+
+    <div id="status" aria-live="polite"></div>
+
+    <div class="demo">Real accounts supported. Guests get K10 to play.</div>
+  </div>
+
+  <!-- Modal: Register / Login (Full name + Phone + Password) -->
+  <div id="modalBackdrop" class="modal-backdrop" aria-hidden="true">
+    <div class="modal" role="dialog" aria-modal="true">
+      <h3 id="modalTitle">Login</h3>
+
+      <form id="authForm">
+        <div id="fullnameRow" style="display:none;">
+          <label for="modalFullname">Full name</label>
+          <input id="modalFullname" name="fullname" autocomplete="name" />
+        </div>
+
+        <label for="modalPhone">Phone number</label>
+        <input id="modalPhone" name="phone" type="tel" autocomplete="tel" placeholder="+2507..." />
+
+        <label for="modalPassword">Password</label>
+        <input id="modalPassword" name="password" type="password" autocomplete="current-password" />
+
+        <div class="row">
+          <button type="button" id="modalCancel">Cancel</button>
+          <button type="submit" id="modalSubmit">Submit</button>
+        </div>
+        <div id="modalMessage" class=""></div>
+      </form>
+    </div>
+  </div>
+
+  <script>
+  (function () {
+    // Execute in closure to avoid polluting global scope
+
+    // CONFIG
+    let API_BASE = '/api'; // default relative path; update via backend box if needed
+    const TOKEN_KEY = 'kandeke_token';
+    const LOCAL_USERS_KEY = 'kandeke_local_users'; // keyed by phone
+    const LOCAL_CURRENT_KEY = 'kandeke_local_current';
+
+    // State
+    let authMode = null; // 'server' | 'local' | null
+    let currentUser = null;
+    let balance = 10;
+    let freePlays = 0;
+
+    // DOM refs
+    const backendUrlInput = document.getElementById('backendUrlInput');
+    const setBackendBtn = document.getElementById('setBackendBtn');
+    const apiStatusEl = document.getElementById('apiStatus');
+
+    const usernameEl = document.getElementById('username');
+    const balanceEl = document.getElementById('balance');
+    const freeRoundsEl = document.getElementById('freeRounds');
+    const betAmountInput = document.getElementById('betAmount');
+    const depositInput = document.getElementById('depositAmount');
+    const withdrawInput = document.getElementById('withdrawAmount');
+    const betBtn = document.getElementById('betBtn');
+    const cashOutBtn = document.getElementById('cashOutBtn');
+    const statusEl = document.getElementById('status');
+
+    const loginBtn = document.getElementById('loginBtn');
+    const registerBtn = document.getElementById('registerBtn');
+    const logoutBtn = document.getElementById('logoutBtn');
+    const depositBtn = document.getElementById('depositBtn');
+    const withdrawBtn = document.getElementById('withdrawBtn');
+
+    const modalBackdrop = document.getElementById('modalBackdrop');
+    const modalTitle = document.getElementById('modalTitle');
+    const authForm = document.getElementById('authForm');
+    const fullnameRow = document.getElementById('fullnameRow');
+    const modalFullname = document.getElementById('modalFullname');
+    const modalPhone = document.getElementById('modalPhone');
+    const modalPassword = document.getElementById('modalPassword');
+    const modalSubmit = document.getElementById('modalSubmit');
+    const modalCancel = document.getElementById('modalCancel');
+    const modalMessage = document.getElementById('modalMessage');
+
+    // Helpers: local storage users (offline fallback)
+    function loadLocalUsers() {
+      try { return JSON.parse(localStorage.getItem(LOCAL_USERS_KEY) || '{}'); } catch (e) { return {}; }
+    }
+    function saveLocalUsers(obj) {
+      try { localStorage.setItem(LOCAL_USERS_KEY, JSON.stringify(obj || {})); } catch (e) {}
+    }
+    function getLocalCurrentPhone() {
+      try { return localStorage.getItem(LOCAL_CURRENT_KEY) || ''; } catch (e) { return ''; }
+    }
+    function setLocalCurrentPhone(phone) {
+      try { localStorage.setItem(LOCAL_CURRENT_KEY, phone || ''); } catch (e) {}
+    }
+    function uuidv4() {
+      return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
+        const r = Math.random() * 16 | 0, v = c == 'x' ? r : (r & 0x3 | 0x8);
+        return v.toString(16);
+      });
+    }
+
+    function setApiStatus(text, color) {
+      apiStatusEl.textContent = text;
+      apiStatusEl.style.background = color || '#072033';
+    }
+
+    // Build absolute fetch URL from API_BASE + path
+    function buildUrl(path) {
+      // API_BASE should already include '/api' if a custom backend was set
+      // Ensure there's exactly one slash between base and path
+      if (!API_BASE) return path;
+      return (API_BASE.replace(/\/+$/, '')) + '/' + path.replace(/^\/+/, '');
+    }
+
+    // Generic fetch wrapper with JSON parsing and helpful errors
+    async function apiFetch(path, options = {}, withAuth = true) {
+      const headers = options.headers || {};
+      if (!headers['Content-Type'] && !(options && options.body instanceof FormData)) {
+        headers['Content-Type'] = 'application/json';
+      }
+      if (withAuth) {
+        const token = localStorage.getItem(TOKEN_KEY);
+        if (token) headers['Authorization'] = 'Bearer ' + token;
+      }
+      options.headers = headers;
+      const url = buildUrl(path);
+      let res;
+      try {
+        res = await fetch(url, options);
+      } catch (err) {
+        // network-level error
+        const e = new Error('Network error: ' + (err.message || 'failed to fetch'));
+        e.network = true;
+        throw e;
+      }
+      const text = await res.text();
+      let json = null;
+      try { json = text ? JSON.parse(text) : null; } catch (e) { json = null; }
+      if (!res.ok) {
+        const msg = (json && json.error) ? json.error : (text || `Request failed (${res.status})`);
+        const e = new Error(msg);
+        e.status = res.status;
+        throw e;
+      }
+      return json;
+    }
+
+    // tryApi returns object indicating network vs server errors to allow fallback
+    async function tryApi(path, options = {}, withAuth = true) {
+      try {
+        const data = await apiFetch(path, options, withAuth);
+        return { ok: true, data };
+      } catch (err) {
+        if (err.network) return { ok: false, network: true, error: err };
+        return { ok: false, network: false, error: err };
+      }
+    }
+
+    /* -------------------------
+       AUTH flows (server first, fallback local)
+       Register fields: fullname, phone, password
+       Login: phone, password
+    ------------------------- */
+
+    async function serverRegister(fullname, phone, password) {
+      return await tryApi('/auth/register', {
+        method: 'POST',
+        body: JSON.stringify({ username: fullname, phone, password })
+      }, false);
+    }
+
+    function localRegister(fullname, phone, password) {
+      const users = loadLocalUsers();
+      if (users[phone]) throw new Error('Phone already registered locally');
+      const id = uuidv4();
+      const now = new Date().toISOString();
+      users[phone] = { id, username: fullname, phone, password, balance: 10, freeRounds: 0, createdAt: now, updatedAt: now };
+      saveLocalUsers(users);
+      setLocalCurrentPhone(phone);
+      localStorage.removeItem(TOKEN_KEY);
+      authMode = 'local';
+      currentUser = users[phone];
+      return { token: null, user: users[phone] };
+    }
+
+    async function registerFlow(fullname, phone, password) {
+      // try server first
+      const attempt = await serverRegister(fullname, phone, password);
+      if (attempt.ok) {
+        // success: store token and use server user
+        if (attempt.data && attempt.data.token) {
+          localStorage.setItem(TOKEN_KEY, attempt.data.token);
+          authMode = 'server';
+          currentUser = attempt.data.user;
+          setApiStatus('API: connected', '#083a1f');
+          return attempt.data;
+        }
+      } else {
+        if (attempt.network) {
+          // network fail -> fallback local
+          const local = localRegister(fullname, phone, password);
+          setApiStatus('API: offline (local mode)', '#663300');
+          return local;
+        }
+        throw attempt.error; // server-side validation or other
+      }
+    }
+
+    async function serverLogin(phone, password) {
+      return await tryApi('/auth/login', {
+        method: 'POST',
+        body: JSON.stringify({ phone, password })
+      }, false);
+    }
+
+    function localLogin(phone, password) {
+      const users = loadLocalUsers();
+      const u = users[phone];
+      if (!u) throw new Error('Local account not found');
+      if (u.password !== password) throw new Error('Invalid credentials (local)');
+      setLocalCurrentPhone(phone);
+      authMode = 'local';
+      currentUser = u;
+      localStorage.removeItem(TOKEN_KEY);
+      return { user: u };
+    }
+
+    async function loginFlow(phone, password) {
+      const attempt = await serverLogin(phone, password);
+      if (attempt.ok) {
+        localStorage.setItem(TOKEN_KEY, attempt.data.token);
+        authMode = 'server';
+        currentUser = attempt.data.user;
+        setApiStatus('API: connected', '#083a1f');
+        return attempt.data;
+      } else {
+        if (attempt.network) {
+          // fallback local
+          const local = localLogin(phone, password);
+          setApiStatus('API: offline (local mode)', '#663300');
+          return { token: null, user: local.user };
+        }
+        throw attempt.error;
+      }
+    }
+
+    async function serverGetMe() {
+      const attempt = await tryApi('/users/me', { method: 'GET' }, true);
+      if (attempt.ok) return attempt.data;
+      if (attempt.network) throw new Error('Network error');
+      throw attempt.error;
+    }
+
+    // Balance operations
+    async function serverDeposit(amount) {
+      const attempt = await tryApi('/users/deposit', { method: 'POST', body: JSON.stringify({ amount }) }, true);
+      if (attempt.ok) return attempt.data;
+      if (attempt.network) throw new Error('Network error');
+      throw attempt.error;
+    }
+    async function serverWithdraw(amount) {
+      const attempt = await tryApi('/users/withdraw', { method: 'POST', body: JSON.stringify({ amount }) }, true);
+      if (attempt.ok) return attempt.data;
+      if (attempt.network) throw new Error('Network error');
+      throw attempt.error;
+    }
+    async function serverChangeBalance(delta) {
+      const attempt = await tryApi('/users/balance/change', { method: 'POST', body: JSON.stringify({ delta }) }, true);
+      if (attempt.ok) return attempt.data;
+      if (attempt.network) throw new Error('Network error');
+      throw attempt.error;
+    }
+
+    function localApplyChange(delta) {
+      const phone = getLocalCurrentPhone();
+      const users = loadLocalUsers();
+      const u = users[phone];
+      if (!u) throw new Error('No local account');
+      const updated = Number(u.balance || 0) + Number(delta);
+      if (updated < 0) throw new Error('Insufficient funds (local)');
+      u.balance = updated;
+      u.updatedAt = new Date().toISOString();
+      saveLocalUsers(users);
+      currentUser = u;
+      return u;
+    }
+
+    // UI helpers
+    function updateUIFromState() {
+      if (authMode === 'server' && currentUser) {
+        usernameEl.textContent = currentUser.username || currentUser.phone || 'Player';
+        balance = Number(currentUser.balance || 0);
+        freePlays = Number(currentUser.freeRounds || 0);
+      } else if (authMode === 'local' && currentUser) {
+        usernameEl.textContent = (currentUser.username || currentUser.phone || 'Player') + ' (offline)';
+        balance = Number(currentUser.balance || 0);
+        freePlays = Number(currentUser.freeRounds || 0);
+      } else {
+        usernameEl.textContent = 'Guest';
+        balance = 10;
+        freePlays = 0;
+      }
+      balanceEl.textContent = 'K ' + Number(balance || 0).toFixed(2);
+      freeRoundsEl.textContent = freePlays ? 'Free rounds: ' + freePlays : '';
+      loginBtn.style.display = (authMode ? 'none' : '');
+      registerBtn.style.display = (authMode ? 'none' : '');
+      logoutBtn.style.display = (authMode ? '' : 'none');
+    }
+
+    // Modal controls
+    function showModal(mode) {
+      modalMessage.textContent = '';
+      modalMessage.className = '';
+      if (mode === 'login') {
+        modalTitle.textContent = 'Login';
+        fullnameRow.style.display = 'none';
+        modalFullname.value = '';
+        modalPhone.value = '';
+        modalPassword.value = '';
+        modalSubmit.textContent = 'Login';
+      } else {
+        modalTitle.textContent = 'Register';
+        fullnameRow.style.display = '';
+        modalFullname.value = '';
+        modalPhone.value = '';
+        modalPassword.value = '';
+        modalSubmit.textContent = 'Register';
+      }
+      modalBackdrop.style.display = 'flex';
+      modalBackdrop.setAttribute('aria-hidden','false');
+      setTimeout(() => modalPhone.focus(), 50);
+    }
+    function hideModal() {
+      modalBackdrop.style.display = 'none';
+      modalBackdrop.setAttribute('aria-hidden','true');
+    }
+    modalCancel.addEventListener('click', (e) => { e.preventDefault(); hideModal(); });
+
+    // Auth form submit
+    authForm.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      modalMessage.textContent = '';
+      modalMessage.className = '';
+      const isRegister = modalTitle.textContent.toLowerCase().includes('register');
+      const phone = (modalPhone.value || '').trim();
+      const password = modalPassword.value || '';
+      const fullname = (modalFullname.value || '').trim();
+
+      if (!phone || !password || (isRegister && !fullname)) {
+        modalMessage.textContent = 'Please fill required fields';
+        modalMessage.className = 'error';
+        return;
+      }
+
+      modalSubmit.disabled = true;
+      try {
+        if (isRegister) {
+          const res = await registerFlow(fullname, phone, password);
+          const user = res && res.user ? res.user : (res.user || res);
+          if (user) {
+            updateAfterAuth(res);
+            modalMessage.textContent = 'Registered and logged in';
+            modalMessage.className = 'success';
+            setTimeout(hideModal, 700);
+          }
+        } else {
+          const res = await loginFlow(phone, password);
+          const user = (res && res.payload && res.payload.user) ? res.payload.user : (res.user || (res.payload && res.payload.user));
+          updateAfterAuth(res);
+          modalMessage.textContent = 'Logged in';
+          modalMessage.className = 'success';
+          setTimeout(hideModal, 400);
+        }
+      } catch (err) {
+        modalMessage.textContent = err.message || 'Auth failed';
+        modalMessage.className = 'error';
+      } finally {
+        modalSubmit.disabled = false;
+      }
+    });
+
+    function updateAfterAuth(res) {
+      // res can be { token, user } or local fallback
+      if (!res) return;
+      if (res.token) localStorage.setItem(TOKEN_KEY, res.token);
+      const user = res.user || (res.payload && res.payload.user) || currentUser;
+      if (user) {
+        currentUser = user;
+        authMode = res.token ? 'server' : (authMode || 'local');
+      }
+      updateUIFromState();
+      setApiStatus(authMode === 'server' ? 'API: connected' : 'API: offline (local)', authMode === 'server' ? '#083a1f' : '#663300');
+    }
+
+    // Register/Login button wire
+    registerBtn.addEventListener('click', () => showModal('register'));
+    loginBtn.addEventListener('click', () => showModal('login'));
+    logoutBtn.addEventListener('click', () => {
+      localStorage.removeItem(TOKEN_KEY);
+      setLocalCurrentPhone('');
+      currentUser = null;
+      authMode = null;
+      balance = 10;
+      updateUIFromState();
+      setApiStatus('API: auto', '#072033');
+    });
+
+    // Deposit/Withdraw handlers
+    depositBtn.addEventListener('click', async () => {
+      const amount = Number(depositInput.value);
+      if (!(amount > 0)) return alert('Enter deposit amount > 0');
+      try {
+        if (authMode === 'server') {
+          const updated = await serverDeposit(amount);
+          if (updated) currentUser = updated;
+        } else if (authMode === 'local') {
+          const u = localApplyChange(amount);
+          currentUser = u;
+        } else {
+          balance += amount;
+        }
+        depositInput.value = '';
+        updateUIFromState();
+        alert('Deposit applied' + (authMode ? '' : ' (guest session only)'));
+      } catch (err) {
+        alert('Deposit failed: ' + (err.message || ''));
+      }
+    });
+
+    withdrawBtn.addEventListener('click', async () => {
+      const amount = Number(withdrawInput.value);
+      if (!(amount > 0)) return alert('Enter withdraw amount > 0');
+      try {
+        if (authMode === 'server') {
+          const updated = await serverWithdraw(amount);
+          if (updated) currentUser = updated;
+        } else if (authMode === 'local') {
+          const u = localApplyChange(-amount);
+          currentUser = u;
+        } else {
+          if (balance < amount) return alert('Insufficient balance');
+          balance -= amount;
+        }
+        withdrawInput.value = '';
+        updateUIFromState();
+        alert('Withdraw applied' + (authMode ? '' : ' (guest session only)'));
+      } catch (err) {
+        alert('Withdraw failed: ' + (err.message || ''));
+      }
+    });
+
+    // Game logic (bet & cashout)
+    let multiplier = 1.0;
+    let bet = 0;
+    let timer = null;
+    let crashed = false;
+
+    betBtn.addEventListener('click', async () => {
+      if (timer) return;
+      bet = Number(betAmountInput.value);
+      if (bet <= 0) return alert('Enter a valid bet');
+
+      let usingFree = false;
+      if (freePlays > 0) {
+        freePlays--;
+        usingFree = true;
+      } else {
+        if (balance < bet) return alert('Insufficient balance');
+        // persist deduction
+        try {
+          if (authMode === 'server') {
+            const updated = await serverChangeBalance(-bet);
+            if (updated) currentUser = updated;
+          } else if (authMode === 'local') {
+            const u = localApplyChange(-bet);
+            currentUser = u;
+          } else {
+            balance -= bet;
+          }
+        } catch (err) {
+          alert('Could not place bet: ' + (err.message || ''));
+          return;
+        }
+      }
+
+      multiplier = 1.0;
+      crashed = false;
+      document.getElementById('plane').style.bottom = '10px';
+      document.getElementById('multiplier').innerText = '1.00x';
+      statusEl.textContent = '✈️ Plane taking off...';
+      cashOutBtn.disabled = false;
+
+      let crashPoint = Math.random() < 0.7 ? 1.1 + Math.random()*0.6 : 2 + Math.random()*3;
+
+      timer = setInterval(()=> {
+        multiplier += 0.02;
+        document.getElementById('multiplier').innerText = multiplier.toFixed(2) + 'x';
+        const planeEl = document.getElementById('plane');
+        planeEl.style.bottom = (parseFloat(planeEl.style.bottom || 10) + 2) + 'px';
+
+        if (multiplier >= crashPoint) {
+          doCrash();
+        }
+      }, 100);
+
+      updateUIFromState();
+    });
+
+    cashOutBtn.addEventListener('click', async () => {
+      if (crashed) return;
+      clearInterval(timer);
+      timer = null;
+      const win = bet * multiplier;
+      // optimistic update
+      balance += win;
+      statusEl.textContent = '✅ Cashed out at ' + multiplier.toFixed(2) + 'x → Won K ' + win.toFixed(2);
+      cashOutBtn.disabled = true;
+
+      try {
+        if (authMode === 'server') {
+          const updated = await serverChangeBalance(win);
+          if (updated) currentUser = updated;
+        } else if (authMode === 'local') {
+          const u = localApplyChange(win);
+          currentUser = u;
+        } else {
+          // guest: nothing to persist
+        }
+      } catch (err) {
+        alert('Warning: could not save your win: ' + (err.message || ''));
+      } finally {
+        updateUIFromState();
+      }
+    });
+
+    function doCrash() {
+      clearInterval(timer);
+      timer = null;
+      crashed = true;
+      statusEl.textContent = '💥 CRASH at ' + multiplier.toFixed(2) + 'x — You lost';
+      cashOutBtn.disabled = true;
+      updateUIFromState();
+    }
+
+    // Backend set button: normalize and set API_BASE
+    setBackendBtn.addEventListener('click', () => {
+      const raw = (backendUrlInput.value || '').trim();
+      if (!raw) {
+        API_BASE = '/api';
+        setApiStatus('API: auto', '#072033');
+        return;
+      }
+      let val = raw.replace(/\/+$/, ''); // remove trailing slashes
+      // If user supplied a URL that already includes /api, keep it, otherwise append /api
+      API_BASE = val.endsWith('/api') ? val : val + '/api';
+      // Quick connectivity check: attempt a fetch to API_BASE root (no auth). We only detect network failure here.
+      fetch(API_BASE, { method: 'GET', mode: 'cors' }).then(() => {
+        setApiStatus('API: set (reachable)', '#083a1f');
+      }).catch(() => {
+        setApiStatus('API: set (unreachable)', '#663300');
+        alert('Could not reach API at ' + API_BASE + '. The app will fall back to offline/local mode when server calls fail.');
+      });
+    });
+
+    // Initialization: restore local user or server session if token exists
+    (async function init() {
+      // default guest
+      authMode = null;
+      balance = 10;
+      updateUIFromState();
+      // restore local current if present
+      const localPhone = getLocalCurrentPhone();
+      if (localPhone) {
+        const lu = loadLocalUsers();
+        if (lu[localPhone]) {
+          currentUser = lu[localPhone];
+          authMode = 'local';
+          updateUIFromState();
+        }
+      }
+      // if token present, try server /users/me
+      const token = localStorage.getItem(TOKEN_KEY);
+      if (token) {
+        try {
+          const meAttempt = await tryApi('/users/me', { method: 'GET' }, true);
+          if (meAttempt.ok) {
+            authMode = 'server';
+            currentUser = meAttempt.data;
+            updateUIFromState();
+            setApiStatus('API: connected', '#083a1f');
+          } else {
+            setApiStatus('API: unreachable', '#663300');
+          }
+        } catch (e) {
+          // network or server error -> offline
+          setApiStatus('API: unreachable', '#663300');
+        }
+      }
+    })();
+
+    // Expose small debug helper in window
+    window.__KaNdeke = {
+      setApiBase: (b) => { backendUrlInput.value = b; setBackendBtn.click(); },
+      getState: () => ({ authMode, currentUser, balance, freePlays, API_BASE }),
+      clearLocal: () => { localStorage.removeItem(LOCAL_USERS_KEY); localStorage.removeItem(LOCAL_CURRENT_KEY); localStorage.removeItem(TOKEN_KEY); alert('cleared local data'); }
+    };
+
+    // Helper wrappers to hide implementation detail (use server* functions from earlier)
+    async function serverDeposit(amount) { return (await tryApi('/users/deposit', { method:'POST', body: JSON.stringify({ amount }) }, true)).data; }
+    async function serverWithdraw(amount) { return (await tryApi('/users/withdraw', { method:'POST', body: JSON.stringify({ amount }) }, true)).data; }
+    async function serverChangeBalance(delta) { return (await tryApi('/users/balance/change', { method:'POST', body: JSON.stringify({ delta }) }, true)).data; }
+
+  })();
+  </script>
+</body>
+</html>
