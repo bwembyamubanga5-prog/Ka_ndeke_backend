@@ -2,7 +2,7 @@ const express = require("express");
 const router = express.Router();
 
 const users = require("./users");
-const { generateCrashPoint, computePayout } = require("../gameEngine");
+const { generateCrashPoint, computePayout } = require("./gameEngine");
 
 // health endpoint for frontend probe
 router.get("/health", (req, res) => {
